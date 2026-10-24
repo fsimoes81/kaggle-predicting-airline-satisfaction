@@ -10,11 +10,12 @@ Uso:
 """
 
 import argparse
+import json
 import time
 
 import pandas as pd
 
-from src.config import CATEGORICAL_COLS, ID_COL, SURVEY_RATING_COLS
+from src.config import BASE_DIR, CATEGORICAL_COLS, ID_COL, SURVEY_RATING_COLS
 from src.data import load_original, load_test, load_train
 from src.evaluation import run_stratified_kfold_cv
 from src.features import prepare_features
@@ -35,6 +36,8 @@ MODEL_FNS = {
 #   ratings_as_cat:  trata as notas 0-5 como categorias (a relação com o alvo não é
 #                    monotônica: nota 0 tem satisfação alta, ver EDA)
 #   use_original:    acrescenta o dataset real aos folds de treino
+#   tuned:           parte dos parâmetros de experiments/best_params_<modelo>.json
+#                    (gerados por scripts/tune.py); "params" sobrescreve por cima
 EXPERIMENTS: dict[str, dict] = {
     "lgbm_raw": {"desc": "LightGBM, features brutas", "model": "lgbm"},
     "xgb_raw": {
@@ -63,7 +66,58 @@ EXPERIMENTS: dict[str, dict] = {
         "params": {"task_type": "GPU"},
         "ratings_as_cat": True,
     },
+    # Rodada 2: modelos ajustados com learning rate menor + diversidade para o ensemble
+    "lgbm_tuned": {
+        "desc": "LightGBM ajustado (Optuna), lr 0.02",
+        "model": "lgbm",
+        "tuned": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "xgb_tuned": {
+        "desc": "XGBoost ajustado (Optuna), lr 0.02",
+        "model": "xgb",
+        "tuned": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "cat_deep": {
+        "desc": "CatBoost profundidade 8, lr 0.05, até 5000 árvores",
+        "model": "catboost",
+        "params": {
+            "task_type": "GPU",
+            "depth": 8,
+            "iterations": 5000,
+            "l2_leaf_reg": 5,
+        },
+    },
+    "xgb_tuned_orig": {
+        "desc": "XGBoost ajustado + dataset original no treino",
+        "model": "xgb",
+        "tuned": True,
+        "use_original": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "cat_deep_orig": {
+        "desc": "CatBoost profundidade 8 + dataset original no treino",
+        "model": "catboost",
+        "use_original": True,
+        "params": {
+            "task_type": "GPU",
+            "depth": 8,
+            "iterations": 5000,
+            "l2_leaf_reg": 5,
+        },
+    },
 }
+
+
+def load_tuned_params(model: str) -> dict:
+    """Lê os melhores parâmetros encontrados pelo scripts/tune.py."""
+    path = BASE_DIR / "experiments" / f"best_params_{model}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"Rode antes: python scripts/tune.py {model}")
+    params = json.loads(path.read_text())
+    params.pop("auc_subsample", None)
+    return params
 
 
 def build_data(exp: dict) -> tuple:
@@ -102,7 +156,8 @@ def run(name: str) -> dict:
     seed_everything()
     X, y, X_test, extra, cat_cols, _ = build_data(exp)
 
-    params = dict(exp.get("params", {}))
+    params = load_tuned_params(exp["model"]) if exp.get("tuned") else {}
+    params.update(exp.get("params", {}))
     if cat_cols:
         params["cat_features"] = cat_cols
     model_fn = MODEL_FNS[exp["model"]]
