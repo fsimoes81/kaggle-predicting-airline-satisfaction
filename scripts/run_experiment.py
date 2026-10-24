@@ -17,8 +17,15 @@ import pandas as pd
 
 from src.config import BASE_DIR, CATEGORICAL_COLS, ID_COL, SURVEY_RATING_COLS
 from src.data import load_original, load_test, load_train
+from src.encoders import FoldTargetEncoder
 from src.evaluation import run_stratified_kfold_cv
-from src.features import prepare_features
+from src.features import (
+    add_digit_features,
+    add_frequency_features,
+    add_original_target_means,
+    original_model_probability,
+    prepare_features,
+)
 from src.models import get_catboost_model, get_lgbm_model, get_xgb_model
 from src.tracking import log_experiment, save_predictions
 from src.utils import get_logger, seed_everything
@@ -36,6 +43,8 @@ MODEL_FNS = {
 #   ratings_as_cat:  trata as notas 0-5 como categorias (a relação com o alvo não é
 #                    monotônica: nota 0 tem satisfação alta, ver EDA)
 #   use_original:    acrescenta o dataset real aos folds de treino
+#   fe:              grupos de features sem alvo: "digits", "freq", "orig"
+#   te:              target encoding por fold (colunas brutas + TE_PAIRS)
 #   tuned:           parte dos parâmetros de experiments/best_params_<modelo>.json
 #                    (gerados por scripts/tune.py); "params" sobrescreve por cima
 EXPERIMENTS: dict[str, dict] = {
@@ -107,7 +116,82 @@ EXPERIMENTS: dict[str, dict] = {
             "l2_leaf_reg": 5,
         },
     },
+    # Rodada 3: features inspiradas nos notebooks públicos (uma família por vez,
+    # cumulativo). lr 0.05 para iterar rápido; a referência é lgbm_tuned_lr05.
+    "lgbm_tuned_lr05": {
+        "desc": "LightGBM ajustado, lr 0.05 (referência da rodada 3)",
+        "model": "lgbm",
+        "tuned": True,
+    },
+    "lgbm_fe_digits": {
+        "desc": "+ dígitos de idade, distância e atrasos",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits"],
+    },
+    "lgbm_fe_freq": {
+        "desc": "+ frequência de cada valor",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits", "freq"],
+    },
+    "lgbm_fe_orig": {
+        "desc": "+ dataset original como features (taxas e modelo auxiliar)",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits", "freq", "orig"],
+    },
+    "lgbm_fe_te": {
+        "desc": "+ target encoding por fold (colunas e pares)",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits", "freq", "orig"],
+        "te": True,
+    },
 }
+
+# Colunas numéricas com muitos valores distintos, onde dígitos e frequência fazem sentido
+DIGIT_COLS = [
+    "Age",
+    "Flight Distance",
+    "Departure Delay in Minutes",
+    "Arrival Delay in Minutes",
+]
+# Pares escolhidos entre as colunas mais importantes do modelo (ganho de split)
+TE_PAIRS = [
+    ("Class", "Type of Travel"),
+    ("Online boarding", "Inflight wifi service"),
+    ("Online boarding", "Class"),
+    ("Inflight wifi service", "Type of Travel"),
+    ("Customer Type", "Type of Travel"),
+    ("Flight Distance", "Class"),
+    ("Flight Distance", "Type of Travel"),
+    ("Flight Distance", "Customer Type"),
+    ("Age", "Class"),
+    ("Age", "Type of Travel"),
+]
+
+
+def add_engineered_features(
+    train_df: pd.DataFrame, test_df: pd.DataFrame, groups: list[str]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Aplica as famílias de features sem alvo pedidas pelo experimento."""
+    raw_cols = [c for c in test_df.columns if c != ID_COL]
+    if "digits" in groups:
+        train_df = add_digit_features(train_df, DIGIT_COLS)
+        test_df = add_digit_features(test_df, DIGIT_COLS)
+    if "freq" in groups:
+        train_df, test_df = add_frequency_features([train_df, test_df], raw_cols)
+    if "orig" in groups:
+        original = load_original()
+        train_df = add_original_target_means(train_df, original, raw_cols)
+        test_df = add_original_target_means(test_df, original, raw_cols)
+        p_train, p_test = original_model_probability(original, [train_df, test_df])
+        train_df, test_df = (
+            train_df.assign(orig_prob=p_train),
+            test_df.assign(orig_prob=p_test),
+        )
+    return train_df, test_df
 
 
 def load_tuned_params(model: str) -> dict:
@@ -123,6 +207,8 @@ def load_tuned_params(model: str) -> dict:
 def build_data(exp: dict) -> tuple:
     """Monta X, y, X_test e o par de treino extra conforme as opções do experimento."""
     train_df, test_df = load_train(), load_test()
+    raw_cols = [c for c in test_df.columns if c != ID_COL]
+    train_df, test_df = add_engineered_features(train_df, test_df, exp.get("fe", []))
     is_catboost = exp["model"] == "catboost"
 
     frames = [train_df]
@@ -148,13 +234,16 @@ def build_data(exp: dict) -> tuple:
     n = len(train_df)
     X, y = X_full.iloc[:n], y_full.iloc[:n]
     extra = (X_full.iloc[n:], y_full.iloc[n:]) if len(X_full) > n else None
-    return X, y, X_test, extra, cat_cols, test_df[ID_COL].values
+    fold_transform = None
+    if exp.get("te"):
+        fold_transform = FoldTargetEncoder(raw_cols, TE_PAIRS).as_fold_transform()
+    return X, y, X_test, extra, cat_cols, fold_transform
 
 
 def run(name: str) -> dict:
     exp = EXPERIMENTS[name]
     seed_everything()
-    X, y, X_test, extra, cat_cols, _ = build_data(exp)
+    X, y, X_test, extra, cat_cols, fold_transform = build_data(exp)
 
     params = load_tuned_params(exp["model"]) if exp.get("tuned") else {}
     params.update(exp.get("params", {}))
@@ -164,7 +253,12 @@ def run(name: str) -> dict:
 
     t0 = time.time()
     oof, test_preds, metrics = run_stratified_kfold_cv(
-        lambda: model_fn(params), X, y, X_test, extra_train=extra
+        lambda: model_fn(params),
+        X,
+        y,
+        X_test,
+        extra_train=extra,
+        fold_transform=fold_transform,
     )
     elapsed = time.time() - t0
 
