@@ -81,3 +81,132 @@ def test_save_submission_format(tmp_path):
     path = save_submission(np.array([0.1, 0.9]), np.array([10, 11]), "s.csv", tmp_path)
     sub = pd.read_csv(path)
     assert list(sub.columns) == [ID_COL, TARGET_COL]
+
+
+def test_extra_train_only_enters_training_folds():
+    """Dados extras nunca podem aparecer na validação, senão o CV fica otimista."""
+    X, _, y, _ = prepare_features(make_df())
+    X_extra, y_extra = X.iloc[:50].copy(), y.iloc[:50].copy()
+    seen_train_sizes = []
+
+    class Spy:
+        def fit(self, X_tr, y_tr):
+            seen_train_sizes.append(len(X_tr))
+
+        def predict_proba(self, X_va):
+            return np.tile([0.5, 0.5], (len(X_va), 1))
+
+    oof, _, _ = run_stratified_kfold_cv(
+        Spy,
+        X,
+        y,
+        n_splits=4,
+        early_stopping_rounds=None,
+        extra_train=(X_extra, y_extra),
+    )
+    assert oof.shape == (len(X),)
+    assert seen_train_sizes == [len(X) * 3 // 4 + 50] * 4
+
+
+def test_cv_returns_same_folds_for_same_seed():
+    _X, _, y, _ = prepare_features(make_df())
+    from src.evaluation import get_folds
+
+    a, b = get_folds(y, n_splits=3, seed=7), get_folds(y, n_splits=3, seed=7)
+    assert all((va1 == va2).all() for (_, va1), (_, va2) in zip(a, b))
+
+
+def test_tracking_roundtrip(tmp_path):
+    from src.tracking import load_predictions, log_experiment, save_predictions
+
+    save_predictions("exp", np.array([0.1, 0.9]), np.array([0.5]), output_dir=tmp_path)
+    oofs, tests = load_predictions(["exp"], output_dir=tmp_path)
+    assert oofs["exp"].tolist() == [0.1, 0.9] and tests["exp"].tolist() == [0.5]
+
+    metrics = {"overall_oof_auc": 0.9, "mean_fold_auc": 0.9, "std_fold_auc": 0.01}
+    log_experiment("a", "primeiro", metrics, log_path=tmp_path / "log.csv")
+    log = log_experiment("b", "segundo", metrics, log_path=tmp_path / "log.csv")
+    assert log["name"].tolist() == ["a", "b"]
+
+
+def test_hill_climbing_ignores_useless_model_and_beats_singles():
+    from sklearn.metrics import roc_auc_score
+
+    from src.ensemble import hill_climbing
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 2000)
+    a = y + rng.normal(0, 1, 2000)  # dois modelos bons com erros independentes
+    b = y + rng.normal(0, 1, 2000)
+    noise = rng.normal(0, 1, 2000)
+    weights, score = hill_climbing({"a": a, "b": b, "noise": noise}, y)
+    assert weights["noise"] == 0
+    assert score > max(roc_auc_score(y, a), roc_auc_score(y, b))
+
+
+def test_hill_climbing_finds_small_weight_for_weaker_model():
+    """Um modelo mais fraco pode ajudar com peso pequeno mesmo se 50/50 piora."""
+    from sklearn.metrics import roc_auc_score
+
+    from src.ensemble import hill_climbing
+
+    rng = np.random.default_rng(1)
+    y = rng.integers(0, 2, 20000)
+    strong = y + rng.normal(0, 0.6, 20000)
+    weak = y + rng.normal(0, 1.5, 20000)
+    weights, score = hill_climbing({"strong": strong, "weak": weak}, y)
+    assert 0 < weights["weak"] < 0.5
+    assert score > roc_auc_score(y, strong)
+
+
+def test_fold_transform_sees_only_training_targets():
+    """Encoders dependentes do alvo devem ser ajustados só no fold de treino."""
+    X, X_test, y, _ = prepare_features(make_df(), make_df(seed=1, with_target=False))
+    calls = []
+
+    def fold_transform(X_tr, y_tr, X_va, X_te):
+        calls.append((len(X_tr), len(y_tr), len(X_va), len(X_te)))
+        return X_tr, X_va, X_te
+
+    run_stratified_kfold_cv(
+        lambda: get_lgbm_model({"n_estimators": 20}),
+        X,
+        y,
+        X_test,
+        n_splits=4,
+        fold_transform=fold_transform,
+    )
+    assert calls == [(300, 300, 100, len(X_test))] * 4
+
+
+def test_digit_features():
+    from src.features import add_digit_features
+
+    df = add_digit_features(pd.DataFrame({"d": [1234, 7, np.nan]}), ["d"], n_digits=3)
+    assert df[["d_digit0", "d_digit1", "d_digit2"]].iloc[0].tolist() == [4, 3, 2]
+    assert df[["d_digit0", "d_digit1"]].iloc[1].tolist() == [7, 0]
+    assert df["d_digit0"].isna().iloc[2]
+
+
+def test_original_target_means_use_only_original_target():
+    from src.features import add_original_target_means
+
+    original = pd.DataFrame({"c": ["a", "a", "b"], TARGET_COL: [1, 0, 1]})
+    df = add_original_target_means(
+        pd.DataFrame({"c": ["a", "b", "z"]}), original, ["c"]
+    )
+    assert df["c_orig_mean"].tolist()[:2] == [0.5, 1.0]
+    assert np.isnan(df["c_orig_mean"].iloc[2])
+
+
+def test_target_encoder_validation_uses_training_fold_only():
+    from src.encoders import FoldTargetEncoder
+
+    X_tr = pd.DataFrame({"c": ["a"] * 50 + ["b"] * 50})
+    y_tr = pd.Series([1] * 50 + [0] * 50)
+    X_va = pd.DataFrame({"c": ["a", "b", "new"]})
+    enc = FoldTargetEncoder(["c"], smooths=[10.0])
+    tr, va = enc.fit_transform(X_tr, y_tr), enc.transform(X_va)
+    assert list(tr.columns) == ["c", "c_te10"]
+    assert va["c_te10"].iloc[0] > 0.8 and va["c_te10"].iloc[1] < 0.2
+    assert abs(va["c_te10"].iloc[2] - 0.5) < 1e-9  # categoria nova -> média global

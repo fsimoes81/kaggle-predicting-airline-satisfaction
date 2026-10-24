@@ -36,7 +36,7 @@ O conjunto de dados é uma versão gerada sinteticamente a partir de um dataset 
 | `Flight Distance` | Numérico | Distância do voo em milhas/km |
 
 ### 3. Avaliações de Serviços (Pesquisa de Satisfação - Escala de 0 a 5)
-*Nota: Em datasets de companhias aéreas, o valor `0` comumente representa "Não se aplica" ou ausência de nota.*
+*Nota: o valor `0` representa "não se aplica" (ver EDA: nota 0 de embarque online tem 62% de satisfeitos). A coluna `Inflight service` do dataset original não existe nos dados da competição.*
 | Coluna | Descrição |
 | :--- | :--- |
 | `Inflight wifi service` | Satisfação com o serviço de Wi-Fi a bordo |
@@ -50,8 +50,7 @@ O conjunto de dados é uma versão gerada sinteticamente a partir de um dataset 
 | `On-board service` | Qualidade do atendimento dos comissários de bordo |
 | `Leg room service` | Espaço para as pernas |
 | `Baggage handling` | Agilidade e cuidado no manuseio de bagagens |
-| `Check-in service` | Atendimento e eficiência no balcão de check-in |
-| `Inflight service` | Nível geral de serviço durante o voo |
+| `Checkin service` | Atendimento e eficiência no balcão de check-in |
 | `Cleanliness` | Limpeza da aeronave |
 
 ### 4. Métricas de Atraso
@@ -68,9 +67,9 @@ O arquivo submetido ao Kaggle deve ser um CSV no formato:
 
 ```csv
 id,satisfaction
-103904,0.7854
-103905,0.1230
-103906,0.9542
+699635,0.7854
+699636,0.1230
+699637,0.9542
 ...
 ```
 

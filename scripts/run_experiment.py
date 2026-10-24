@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+"""Executa experimentos nomeados com 5-Fold Stratified CV e registra os resultados.
+
+Cada experimento é uma combinação declarativa de modelo + features + dados. As
+predições OOF/teste vão para artifacts/oof/ e o resumo para experiments/results.csv.
+
+Uso:
+    python scripts/run_experiment.py lgbm_raw xgb_raw
+    python scripts/run_experiment.py --list
+"""
+
+import argparse
+import json
+import time
+
+import pandas as pd
+
+from src.config import BASE_DIR, CATEGORICAL_COLS, ID_COL, SURVEY_RATING_COLS
+from src.data import load_original, load_test, load_train
+from src.encoders import FoldTargetEncoder
+from src.evaluation import run_stratified_kfold_cv
+from src.features import (
+    add_digit_features,
+    add_frequency_features,
+    add_original_target_means,
+    original_model_probability,
+    prepare_features,
+)
+from src.models import get_catboost_model, get_lgbm_model, get_xgb_model
+from src.tracking import log_experiment, save_predictions
+from src.utils import get_logger, seed_everything
+
+logger = get_logger("experiments")
+
+MODEL_FNS = {
+    "lgbm": get_lgbm_model,
+    "xgb": get_xgb_model,
+    "catboost": get_catboost_model,
+}
+
+# Cada entrada: descrição legível, modelo, parâmetros extras e opções de dados/features.
+#   domain_features: adiciona agregações de atraso e das notas da pesquisa
+#   ratings_as_cat:  trata as notas 0-5 como categorias (a relação com o alvo não é
+#                    monotônica: nota 0 tem satisfação alta, ver EDA)
+#   use_original:    acrescenta o dataset real aos folds de treino
+#   fe:              grupos de features sem alvo: "digits", "freq", "orig"
+#   te:              target encoding por fold (colunas brutas + TE_PAIRS)
+#   tuned:           parte dos parâmetros de experiments/best_params_<modelo>.json
+#                    (gerados por scripts/tune.py); "params" sobrescreve por cima
+EXPERIMENTS: dict[str, dict] = {
+    "lgbm_raw": {"desc": "LightGBM, features brutas", "model": "lgbm"},
+    "xgb_raw": {
+        "desc": "XGBoost, features brutas",
+        "model": "xgb",
+        "params": {"device": "cuda"},
+    },
+    "cat_raw": {
+        "desc": "CatBoost, categóricas nativas",
+        "model": "catboost",
+        "params": {"task_type": "GPU"},
+    },
+    "lgbm_domain": {
+        "desc": "LightGBM + features de domínio",
+        "model": "lgbm",
+        "domain_features": True,
+    },
+    "lgbm_orig": {
+        "desc": "LightGBM + dataset original no treino",
+        "model": "lgbm",
+        "use_original": True,
+    },
+    "cat_ratings_cat": {
+        "desc": "CatBoost, notas como categóricas",
+        "model": "catboost",
+        "params": {"task_type": "GPU"},
+        "ratings_as_cat": True,
+    },
+    # Rodada 2: modelos ajustados com learning rate menor + diversidade para o ensemble
+    "lgbm_tuned": {
+        "desc": "LightGBM ajustado (Optuna), lr 0.02",
+        "model": "lgbm",
+        "tuned": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "xgb_tuned": {
+        "desc": "XGBoost ajustado (Optuna), lr 0.02",
+        "model": "xgb",
+        "tuned": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "cat_deep": {
+        "desc": "CatBoost profundidade 8, lr 0.05, até 5000 árvores",
+        "model": "catboost",
+        "params": {
+            "task_type": "GPU",
+            "depth": 8,
+            "iterations": 5000,
+            "l2_leaf_reg": 5,
+        },
+    },
+    "xgb_tuned_orig": {
+        "desc": "XGBoost ajustado + dataset original no treino",
+        "model": "xgb",
+        "tuned": True,
+        "use_original": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "cat_deep_orig": {
+        "desc": "CatBoost profundidade 8 + dataset original no treino",
+        "model": "catboost",
+        "use_original": True,
+        "params": {
+            "task_type": "GPU",
+            "depth": 8,
+            "iterations": 5000,
+            "l2_leaf_reg": 5,
+        },
+    },
+    # Rodada 3: features inspiradas nos notebooks públicos (uma família por vez,
+    # cumulativo). lr 0.05 para iterar rápido; a referência é lgbm_tuned_lr05.
+    "lgbm_tuned_lr05": {
+        "desc": "LightGBM ajustado, lr 0.05 (referência da rodada 3)",
+        "model": "lgbm",
+        "tuned": True,
+    },
+    "lgbm_fe_digits": {
+        "desc": "+ dígitos de idade, distância e atrasos",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits"],
+    },
+    "lgbm_fe_freq": {
+        "desc": "+ frequência de cada valor",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits", "freq"],
+    },
+    "lgbm_fe_orig": {
+        "desc": "+ dataset original como features (taxas e modelo auxiliar)",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits", "freq", "orig"],
+    },
+    "lgbm_fe_te": {
+        "desc": "+ target encoding por fold (colunas e pares)",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits", "freq", "orig"],
+        "te": True,
+    },
+    # Versões finais com todas as famílias, lr 0.02, nas três famílias de modelo
+    "lgbm_fe_final": {
+        "desc": "LightGBM ajustado + todas as features, lr 0.02",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits", "freq", "orig"],
+        "te": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "xgb_fe_final": {
+        "desc": "XGBoost ajustado + todas as features, lr 0.02",
+        "model": "xgb",
+        "tuned": True,
+        "fe": ["digits", "freq", "orig"],
+        "te": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "cat_fe_final": {
+        "desc": "CatBoost profundidade 8 + todas as features",
+        "model": "catboost",
+        "fe": ["digits", "freq", "orig"],
+        "te": True,
+        "params": {
+            "task_type": "GPU",
+            "depth": 8,
+            "iterations": 5000,
+            "l2_leaf_reg": 5,
+        },
+    },
+}
+
+# Colunas numéricas com muitos valores distintos, onde dígitos e frequência fazem sentido
+DIGIT_COLS = [
+    "Age",
+    "Flight Distance",
+    "Departure Delay in Minutes",
+    "Arrival Delay in Minutes",
+]
+# Pares escolhidos entre as colunas mais importantes do modelo (ganho de split)
+TE_PAIRS = [
+    ("Class", "Type of Travel"),
+    ("Online boarding", "Inflight wifi service"),
+    ("Online boarding", "Class"),
+    ("Inflight wifi service", "Type of Travel"),
+    ("Customer Type", "Type of Travel"),
+    ("Flight Distance", "Class"),
+    ("Flight Distance", "Type of Travel"),
+    ("Flight Distance", "Customer Type"),
+    ("Age", "Class"),
+    ("Age", "Type of Travel"),
+]
+
+
+def add_engineered_features(
+    train_df: pd.DataFrame, test_df: pd.DataFrame, groups: list[str]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Aplica as famílias de features sem alvo pedidas pelo experimento."""
+    raw_cols = [c for c in test_df.columns if c != ID_COL]
+    if "digits" in groups:
+        train_df = add_digit_features(train_df, DIGIT_COLS)
+        test_df = add_digit_features(test_df, DIGIT_COLS)
+    if "freq" in groups:
+        train_df, test_df = add_frequency_features([train_df, test_df], raw_cols)
+    if "orig" in groups:
+        original = load_original()
+        train_df = add_original_target_means(train_df, original, raw_cols)
+        test_df = add_original_target_means(test_df, original, raw_cols)
+        p_train, p_test = original_model_probability(original, [train_df, test_df])
+        train_df, test_df = (
+            train_df.assign(orig_prob=p_train),
+            test_df.assign(orig_prob=p_test),
+        )
+    return train_df, test_df
+
+
+def load_tuned_params(model: str) -> dict:
+    """Lê os melhores parâmetros encontrados pelo scripts/tune.py."""
+    path = BASE_DIR / "experiments" / f"best_params_{model}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"Rode antes: python scripts/tune.py {model}")
+    params = json.loads(path.read_text())
+    params.pop("auc_subsample", None)
+    return params
+
+
+def build_data(exp: dict) -> tuple:
+    """Monta X, y, X_test e o par de treino extra conforme as opções do experimento."""
+    train_df, test_df = load_train(), load_test()
+    raw_cols = [c for c in test_df.columns if c != ID_COL]
+    train_df, test_df = add_engineered_features(train_df, test_df, exp.get("fe", []))
+    is_catboost = exp["model"] == "catboost"
+
+    frames = [train_df]
+    if exp.get("use_original"):
+        frames.append(load_original())
+    full = pd.concat(frames, ignore_index=True)
+    # Ajusta o encoder em treino + original juntos para manter as categorias alinhadas
+    X_full, X_test, y_full, _ = prepare_features(
+        full,
+        test_df,
+        create_domain_features=exp.get("domain_features", False),
+        encode_categoricals=not is_catboost,
+    )
+
+    cat_cols = []
+    if is_catboost:
+        cat_cols = list(CATEGORICAL_COLS)
+        if exp.get("ratings_as_cat"):
+            cat_cols += [c for c in SURVEY_RATING_COLS if c in X_full.columns]
+            for df in (X_full, X_test):
+                df[SURVEY_RATING_COLS] = df[SURVEY_RATING_COLS].astype(str)
+
+    n = len(train_df)
+    X, y = X_full.iloc[:n], y_full.iloc[:n]
+    extra = (X_full.iloc[n:], y_full.iloc[n:]) if len(X_full) > n else None
+    fold_transform = None
+    if exp.get("te"):
+        fold_transform = FoldTargetEncoder(raw_cols, TE_PAIRS).as_fold_transform()
+    return X, y, X_test, extra, cat_cols, fold_transform
+
+
+def run(name: str) -> dict:
+    exp = EXPERIMENTS[name]
+    seed_everything()
+    X, y, X_test, extra, cat_cols, fold_transform = build_data(exp)
+
+    params = load_tuned_params(exp["model"]) if exp.get("tuned") else {}
+    params.update(exp.get("params", {}))
+    if cat_cols:
+        params["cat_features"] = cat_cols
+    model_fn = MODEL_FNS[exp["model"]]
+
+    t0 = time.time()
+    oof, test_preds, metrics = run_stratified_kfold_cv(
+        lambda: model_fn(params),
+        X,
+        y,
+        X_test,
+        extra_train=extra,
+        fold_transform=fold_transform,
+    )
+    elapsed = time.time() - t0
+
+    save_predictions(name, oof, test_preds)
+    log_experiment(name, exp["desc"], metrics, params=exp, elapsed_s=elapsed)
+    logger.info(f"[{name}] OOF AUC {metrics['overall_oof_auc']:.5f} em {elapsed:.0f}s")
+    return metrics
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("names", nargs="*", help="Experimentos a executar")
+    parser.add_argument("--list", action="store_true", help="Lista os experimentos")
+    args = parser.parse_args()
+
+    if args.list or not args.names:
+        for name, exp in EXPERIMENTS.items():
+            print(f"{name:20s} {exp['desc']}")
+        return
+    unknown = set(args.names) - EXPERIMENTS.keys()
+    if unknown:
+        parser.error(f"Experimentos desconhecidos: {sorted(unknown)}")
+    for name in args.names:
+        run(name)
+
+
+if __name__ == "__main__":
+    main()

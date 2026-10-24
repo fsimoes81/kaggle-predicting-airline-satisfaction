@@ -43,6 +43,11 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+data/external/*
+!data/external/.gitkeep
+
+# Predições OOF/teste dos experimentos (regeneráveis)
+artifacts/
 
 # Models and Checkpoints
 models/*

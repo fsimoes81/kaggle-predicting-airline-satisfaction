@@ -1,5 +1,6 @@
 """Módulo de validação cruzada (Stratified K-Fold) e avaliação de ROC AUC."""
 
+from collections.abc import Callable
 from typing import Any
 
 import catboost as cb
@@ -50,6 +51,18 @@ def _fit_model(
         model.fit(X_tr, y_tr)
 
 
+def get_folds(
+    y: pd.Series, n_splits: int = N_SPLITS, seed: int = RANDOM_SEED
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Retorna os índices (treino, validação) de cada fold.
+
+    Todos os modelos de um ensemble precisam usar exatamente os mesmos folds para que
+    as predições OOF sejam comparáveis e combináveis sem vazamento.
+    """
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    return list(skf.split(np.zeros(len(y)), y))
+
+
 def run_stratified_kfold_cv(
     model_fn,
     X: pd.DataFrame,
@@ -58,6 +71,8 @@ def run_stratified_kfold_cv(
     n_splits: int = N_SPLITS,
     seed: int = RANDOM_SEED,
     early_stopping_rounds: int | None = 50,
+    extra_train: tuple[pd.DataFrame, pd.Series] | None = None,
+    fold_transform: Callable | None = None,
 ) -> tuple[np.ndarray, np.ndarray | None, dict[str, Any]]:
     """Executa a validação cruzada estratificada gerando predições OOF e no conjunto de teste.
 
@@ -69,23 +84,32 @@ def run_stratified_kfold_cv(
         n_splits: Número de folds (default: 5).
         seed: Semente aleatória.
         early_stopping_rounds: Rodadas de parada antecipada se suportado pelo modelo.
+        extra_train: Par (X, y) adicionado apenas aos folds de treino (ex.: dataset
+            original). Nunca entra na validação, que segue medindo só dados da competição.
+        fold_transform: Função (X_tr, y_tr, X_va, X_test) -> (X_tr, X_va, X_test)
+            aplicada a cada fold. Serve para encoders que usam o alvo (ex.: target
+            encoding): ajustados só no treino do fold, não vazam a validação.
 
     Returns:
         oof_preds: Array de probabilidades preditas Out-Of-Fold.
         test_preds: Array de probabilidades preditas no teste (média dos folds) ou None.
         metrics: Dicionário contendo os scores por fold e o score geral OOF.
     """
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-
     oof_preds = np.zeros(len(X))
     test_preds = np.zeros(len(X_test)) if X_test is not None else None
     fold_scores = []
 
     logger.info(f"Iniciando {n_splits}-Fold Stratified CV...")
 
-    for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
+    for fold, (train_idx, val_idx) in enumerate(get_folds(y, n_splits, seed)):
         X_tr, y_tr = X.iloc[train_idx], y.iloc[train_idx]
         X_va, y_va = X.iloc[val_idx], y.iloc[val_idx]
+        if extra_train is not None:
+            X_tr = pd.concat([X_tr, extra_train[0]], ignore_index=True)
+            y_tr = pd.concat([y_tr, extra_train[1]], ignore_index=True)
+        X_te = X_test
+        if fold_transform is not None:
+            X_tr, X_va, X_te = fold_transform(X_tr, y_tr, X_va, X_test)
 
         model = model_fn()
 
@@ -100,7 +124,7 @@ def run_stratified_kfold_cv(
         logger.info(f"Fold {fold + 1}/{n_splits} - ROC AUC: {score:.5f}")
 
         if X_test is not None:
-            test_preds += model.predict_proba(X_test)[:, 1] / n_splits
+            test_preds += model.predict_proba(X_te)[:, 1] / n_splits
 
     overall_oof_auc = roc_auc_score(y, oof_preds)
     mean_fold_auc = float(np.mean(fold_scores))
