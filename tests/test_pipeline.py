@@ -198,3 +198,15 @@ def test_original_target_means_use_only_original_target():
     assert df["c_orig_mean"].tolist()[:2] == [0.5, 1.0]
     assert np.isnan(df["c_orig_mean"].iloc[2])
 
+
+def test_target_encoder_validation_uses_training_fold_only():
+    from src.encoders import FoldTargetEncoder
+
+    X_tr = pd.DataFrame({"c": ["a"] * 50 + ["b"] * 50})
+    y_tr = pd.Series([1] * 50 + [0] * 50)
+    X_va = pd.DataFrame({"c": ["a", "b", "new"]})
+    enc = FoldTargetEncoder(["c"], smooths=[10.0])
+    tr, va = enc.fit_transform(X_tr, y_tr), enc.transform(X_va)
+    assert list(tr.columns) == ["c", "c_te10"]
+    assert va["c_te10"].iloc[0] > 0.8 and va["c_te10"].iloc[1] < 0.2
+    assert abs(va["c_te10"].iloc[2] - 0.5) < 1e-9  # categoria nova -> média global
