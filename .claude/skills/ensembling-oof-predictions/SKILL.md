@@ -19,8 +19,9 @@ apply the same weights to the test predictions.
 1. Convert each model's predictions to **ranks** in (0, 1]. AUC only sees order, and ranks
    remove calibration differences between LightGBM, XGBoost and CatBoost.
 2. Start with the best single model.
-3. Repeatedly add, with replacement, the model that most improves the blend's OOF metric.
-4. Stop when no addition helps by more than `tol` (1e-6). Weight = times picked.
+3. Repeatedly mix in the (model, fraction `a`) pair that most improves the OOF metric:
+   `blend = (1 - a) * blend + a * model`, with `a` in {0.05, 0.1, 0.2, 0.3, 0.5}.
+4. Stop when no step helps by more than `tol` (1e-6). Weights are the resulting fractions.
 5. Blend the test ranks with the same weights.
 
 Implementation (~40 lines): `src/ensemble.py` (`to_rank`, `blend`, `hill_climbing`).
@@ -40,6 +41,10 @@ Implementation (~40 lines): `src/ensemble.py` (`to_rank`, `blend`, `hill_climbin
 | Gain ≫ fold std with few models | Check for leakage: did a model see validation rows? |
 
 ## Common Mistakes
+- Classic count-based hill climbing started from one model: its first step is forced to
+  50/50. When the best model clearly leads, every 50/50 hurts and the "ensemble"
+  silently stays a single model. Symptom: the final weights are `{best: 1}`. Use several
+  step fractions (above).
 - Blending OOFs from different fold seeds. The weights then reflect leakage, not skill.
 - Optimizing weights on the public leaderboard.
 - Averaging probabilities for AUC when one model is badly calibrated.
