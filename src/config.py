@@ -18,15 +18,18 @@ SUBMISSIONS_DIR = BASE_DIR / os.getenv("SUBMISSIONS_DIR", "submissions")
 NOTEBOOKS_DIR = BASE_DIR / "notebooks"
 DOCS_DIR = BASE_DIR / "docs"
 
-# Garantir existência de pastas principais
-for directory in [
-    DATA_DIR,
-    RAW_DATA_DIR,
-    PROCESSED_DATA_DIR,
-    MODELS_DIR,
-    SUBMISSIONS_DIR,
-]:
-    directory.mkdir(parents=True, exist_ok=True)
+
+def ensure_dirs() -> None:
+    """Cria as pastas de trabalho do projeto se ainda não existirem."""
+    for directory in [
+        DATA_DIR,
+        RAW_DATA_DIR,
+        PROCESSED_DATA_DIR,
+        MODELS_DIR,
+        SUBMISSIONS_DIR,
+    ]:
+        directory.mkdir(parents=True, exist_ok=True)
+
 
 # Identificadores da Competição Kaggle
 COMPETITION_NAME = "playground-series-s6e10"

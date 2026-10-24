@@ -4,14 +4,6 @@
 # **Métrica:** ROC AUC
 
 # %%
-import sys
-from pathlib import Path
-
-# Garante que a raiz do projeto esteja no sys.path mesmo em sessões interativas
-ROOT = Path.cwd() if (Path.cwd() / "src").exists() else Path.cwd().parent
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
-
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -91,5 +83,13 @@ if survey_cols:
 # ## 6. Atrasos e Estatísticas Numéricas
 
 # %%
-delay_cols = [c for c in ["Departure Delay in Minutes", "Arrival Delay in Minutes", "Flight Distance"] if c in train_df.columns]
+delay_cols = [
+    c
+    for c in [
+        "Departure Delay in Minutes",
+        "Arrival Delay in Minutes",
+        "Flight Distance",
+    ]
+    if c in train_df.columns
+]
 print(train_df[delay_cols].describe())

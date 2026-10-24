@@ -4,13 +4,6 @@
 Gera o score de validação OOF (ROC AUC) e o arquivo de submissão para o Kaggle.
 """
 
-import sys
-from pathlib import Path
-
-# Adiciona a raiz do projeto ao path
-BASE_DIR = Path(__file__).resolve().parent.parent
-sys.path.append(str(BASE_DIR))
-
 from src.config import ID_COL, SUBMISSIONS_DIR
 from src.data import load_test, load_train
 from src.evaluation import run_stratified_kfold_cv
@@ -40,7 +33,7 @@ def main():
         logger.info(f"Total de features utilizadas ({len(features)}): {features}")
 
     with timer("Treinamento e Validação Cruzada (5-Fold Stratified CV)", logger):
-        oof_preds, test_preds, metrics = run_stratified_kfold_cv(
+        _, test_preds, metrics = run_stratified_kfold_cv(
             model_fn=get_lgbm_model,
             X=X_train,
             y=y_train,

@@ -4,14 +4,6 @@
 # **Métrica:** ROC AUC
 
 # %%
-import sys
-from pathlib import Path
-
-# Garante que a raiz do projeto esteja no sys.path mesmo em sessões interativas
-ROOT = Path.cwd() if (Path.cwd() / "src").exists() else Path.cwd().parent
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
-
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -70,7 +62,9 @@ print(f"\nScore OOF ROC AUC Geral: {metrics['overall_oof_auc']:.5f}")
 model = get_lgbm_model()
 model.fit(X_train, y_train)
 
-importances = pd.Series(model.feature_importances_, index=feature_names).sort_values(ascending=False)
+importances = pd.Series(model.feature_importances_, index=feature_names).sort_values(
+    ascending=False
+)
 plt.figure(figsize=(10, 6))
 sns.barplot(x=importances.values[:15], y=importances.index[:15], palette="mako")
 plt.title("Top 15 Features (LightGBM)")

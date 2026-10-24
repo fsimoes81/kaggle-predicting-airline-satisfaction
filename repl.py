@@ -6,36 +6,33 @@ módulos de src e configurações pré-carregadas.
 Como usar:
     ipython -i repl.py
 """
-import sys
-from pathlib import Path
 
-# Garante acesso aos módulos de src
-BASE_DIR = Path(__file__).resolve().parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.append(str(BASE_DIR))
-
-# Importação de bibliotecas essenciais
+# ruff: noqa: F401  (imports existem para ficarem pré-carregados na sessão)
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import seaborn as sns
+from IPython import get_ipython
 
 # Importação dos módulos do projeto
-import src.config as cfg
-from src import utils
+from src import config as cfg
+from src import data, models, utils
+from src import evaluation as ev
+from src import features as feat
 
 # Configuração de visualização e reprodutibilidade
 utils.seed_everything(cfg.RANDOM_SEED)
 pd.set_option("display.max_columns", 50)
 pd.set_option("display.width", 120)
 
-# Tenta carregar extensões mágicas úteis no IPython
-try:
-    from IPython import get_ipython
-    ip = get_ipython()
-    if ip:
-        ip.run_line_magic("load_ext", "autoreload")
-        ip.run_line_magic("autoreload", "2")
-        print("✓ Autoreload ativado (%autoreload 2) - alterações em src/ são refletidas automaticamente.")
-except Exception:
-    pass
+# Autoreload: alterações em src/ são refletidas sem reiniciar a sessão
+ip = get_ipython()
+if ip:
+    ip.run_line_magic("load_ext", "autoreload")
+    ip.run_line_magic("autoreload", "2")
+    print(
+        "✓ Autoreload ativado (%autoreload 2) - alterações em src/ são refletidas automaticamente."
+    )
 
 print("\n" + "=" * 60)
 print("🚀 Sessão Interativa REPL iniciada!")

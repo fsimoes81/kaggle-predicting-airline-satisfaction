@@ -72,12 +72,13 @@ train = data.load_train()
 
 # Explorar
 train.shape
-train['satisfaction'].value_counts(normalize=True)
+train["satisfaction"].value_counts(normalize=True)
 
 # Testar uma nova feature
 from src.features import add_domain_features
+
 df_feat = add_domain_features(train)
-print(df_feat[['Total_Delay', 'Survey_Mean']].head())
+print(df_feat[["Total_Delay", "Survey_Mean"]].head())
 ```
 
 ---
