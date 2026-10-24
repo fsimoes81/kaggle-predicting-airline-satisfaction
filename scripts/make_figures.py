@@ -131,7 +131,9 @@ def fig_experiments(log: pd.DataFrame, names: dict[str, str]) -> None:
     ax.invert_yaxis()
     lo = data.min() - 0.001
     ax.set_xlim(lo, data.max() + 0.0006)
-    ax.set_title("O ajuste de hiperparâmetros trouxe o maior ganho; o ensemble, o último passo")
+    ax.set_title(
+        "As features criadas trouxeram o maior ganho: de 0.9583 para 0.9610"
+    )
     ax.set_xlabel("ROC AUC na validação cruzada (eixo ampliado)")
     ax.grid(axis="y", visible=False)
     _save(fig, "04_jornada_experimentos.png")
@@ -139,16 +141,16 @@ def fig_experiments(log: pd.DataFrame, names: dict[str, str]) -> None:
 
 # Experimentos exibidos na jornada (ordem = narrativa da documentação)
 JOURNEY = {
-    "lgbm_raw": "LightGBM (baseline)",
-    "xgb_raw": "XGBoost",
-    "cat_raw": "CatBoost",
-    "lgbm_domain": "LightGBM + features de domínio",
-    "lgbm_orig": "LightGBM + dados originais",
-    "cat_ratings_cat": "CatBoost, notas como categorias",
-    "cat_deep": "CatBoost mais profundo",
-    "xgb_tuned": "XGBoost ajustado (Optuna)",
-    "xgb_tuned_orig": "XGBoost ajustado + dados originais",
-    "lgbm_tuned": "LightGBM ajustado (Optuna)",
+    "lgbm_raw": "LightGBM padrão (baseline)",
+    "lgbm_orig": "+ dados originais como linhas (piorou)",
+    "lgbm_tuned_lr05": "LightGBM ajustado (Optuna)",
+    "lgbm_fe_digits": "+ dígitos",
+    "lgbm_fe_freq": "+ frequência",
+    "lgbm_fe_orig": "+ dados originais como features",
+    "lgbm_fe_te": "+ target encoding",
+    "lgbm_fe_final": "LightGBM final (lr 0.02)",
+    "xgb_fe_final": "XGBoost final",
+    "cat_fe_final": "CatBoost final",
     "ensemble": "Ensemble final (hill climbing)",
 }
 
