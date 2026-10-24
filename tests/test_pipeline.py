@@ -123,3 +123,17 @@ def test_tracking_roundtrip(tmp_path):
     log = log_experiment("b", "segundo", metrics, log_path=tmp_path / "log.csv")
     assert log["name"].tolist() == ["a", "b"]
 
+
+def test_hill_climbing_ignores_useless_model_and_beats_singles():
+    from sklearn.metrics import roc_auc_score
+
+    from src.ensemble import hill_climbing
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 2000)
+    a = y + rng.normal(0, 1, 2000)  # dois modelos bons com erros independentes
+    b = y + rng.normal(0, 1, 2000)
+    noise = rng.normal(0, 1, 2000)
+    weights, score = hill_climbing({"a": a, "b": b, "noise": noise}, y)
+    assert weights["noise"] == 0
+    assert score > max(roc_auc_score(y, a), roc_auc_score(y, b))
