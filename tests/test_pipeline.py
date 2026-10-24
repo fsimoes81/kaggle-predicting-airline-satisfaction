@@ -137,3 +137,18 @@ def test_hill_climbing_ignores_useless_model_and_beats_singles():
     weights, score = hill_climbing({"a": a, "b": b, "noise": noise}, y)
     assert weights["noise"] == 0
     assert score > max(roc_auc_score(y, a), roc_auc_score(y, b))
+
+
+def test_hill_climbing_finds_small_weight_for_weaker_model():
+    """Um modelo mais fraco pode ajudar com peso pequeno mesmo se 50/50 piora."""
+    from sklearn.metrics import roc_auc_score
+
+    from src.ensemble import hill_climbing
+
+    rng = np.random.default_rng(1)
+    y = rng.integers(0, 2, 20000)
+    strong = y + rng.normal(0, 0.6, 20000)
+    weak = y + rng.normal(0, 1.5, 20000)
+    weights, score = hill_climbing({"strong": strong, "weak": weak}, y)
+    assert 0 < weights["weak"] < 0.5
+    assert score > roc_auc_score(y, strong)

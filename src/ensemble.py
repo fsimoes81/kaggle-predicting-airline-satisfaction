@@ -25,35 +25,39 @@ def hill_climbing(
     y: np.ndarray,
     max_iter: int = 50,
     tol: float = 1e-6,
+    steps: tuple[float, ...] = (0.05, 0.1, 0.2, 0.3, 0.5),
 ) -> tuple[dict[str, float], float]:
-    """Seleção gulosa de modelos com reposição (Caruana et al., 2004).
+    """Seleção gulosa de modelos (inspirada em Caruana et al., 2004).
 
-    Começa pelo melhor modelo individual e, a cada passo, adiciona (com reposição) o
-    modelo que mais melhora o AUC do blend. Para quando nenhuma adição melhora mais
-    que `tol`. Os pesos finais são a contagem de vezes que cada modelo foi escolhido.
+    Começa pelo melhor modelo individual e, a cada passo, mistura ao blend atual o
+    modelo e a fração `a` que mais melhoram o AUC: blend = (1 - a) * blend + a * modelo.
+    Testar várias frações evita a armadilha da versão clássica, cujo primeiro passo é
+    sempre 50/50 e descarta modelos mais fracos que só ajudam com peso pequeno.
 
     Returns:
-        weights: Peso (contagem) de cada modelo.
+        weights: Fração de cada modelo no blend final (soma 1).
         score: AUC OOF do blend final.
     """
     ranks = {n: to_rank(p) for n, p in oofs.items()}
     scores = {n: roc_auc_score(y, r) for n, r in ranks.items()}
     best = max(scores, key=scores.get)
-    weights = {n: 0 for n in oofs}
-    weights[best] = 1
+    weights = dict.fromkeys(oofs, 0.0)
+    weights[best] = 1.0
     current = ranks[best].copy()
     best_score = scores[best]
 
     for _ in range(max_iter):
-        k = sum(weights.values())
         candidates = {
-            n: roc_auc_score(y, (current * k + r) / (k + 1)) for n, r in ranks.items()
+            (n, a): roc_auc_score(y, (1 - a) * current + a * r)
+            for n, r in ranks.items()
+            for a in steps
         }
-        name = max(candidates, key=candidates.get)
-        if candidates[name] - best_score <= tol:
+        name, a = max(candidates, key=candidates.get)
+        if candidates[(name, a)] - best_score <= tol:
             break
-        current = (current * k + ranks[name]) / (k + 1)
-        weights[name] += 1
-        best_score = candidates[name]
+        current = (1 - a) * current + a * ranks[name]
+        weights = {n: w * (1 - a) for n, w in weights.items()}
+        weights[name] += a
+        best_score = candidates[(name, a)]
 
     return weights, best_score
