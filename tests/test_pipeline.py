@@ -81,3 +81,31 @@ def test_save_submission_format(tmp_path):
     path = save_submission(np.array([0.1, 0.9]), np.array([10, 11]), "s.csv", tmp_path)
     sub = pd.read_csv(path)
     assert list(sub.columns) == [ID_COL, TARGET_COL]
+
+
+def test_extra_train_only_enters_training_folds():
+    """Dados extras nunca podem aparecer na validação, senão o CV fica otimista."""
+    X, _, y, _ = prepare_features(make_df())
+    X_extra, y_extra = X.iloc[:50].copy(), y.iloc[:50].copy()
+    seen_train_sizes = []
+
+    class Spy:
+        def fit(self, X_tr, y_tr):
+            seen_train_sizes.append(len(X_tr))
+
+        def predict_proba(self, X_va):
+            return np.tile([0.5, 0.5], (len(X_va), 1))
+
+    oof, _, _ = run_stratified_kfold_cv(
+        Spy, X, y, n_splits=4, early_stopping_rounds=None, extra_train=(X_extra, y_extra)
+    )
+    assert oof.shape == (len(X),)
+    assert seen_train_sizes == [len(X) * 3 // 4 + 50] * 4
+
+
+def test_cv_returns_same_folds_for_same_seed():
+    X, _, y, _ = prepare_features(make_df())
+    from src.evaluation import get_folds
+
+    a, b = get_folds(y, n_splits=3, seed=7), get_folds(y, n_splits=3, seed=7)
+    assert all((va1 == va2).all() for (_, va1), (_, va2) in zip(a, b))
