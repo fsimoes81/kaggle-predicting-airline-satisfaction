@@ -109,3 +109,17 @@ def test_cv_returns_same_folds_for_same_seed():
 
     a, b = get_folds(y, n_splits=3, seed=7), get_folds(y, n_splits=3, seed=7)
     assert all((va1 == va2).all() for (_, va1), (_, va2) in zip(a, b))
+
+
+def test_tracking_roundtrip(tmp_path):
+    from src.tracking import load_predictions, log_experiment, save_predictions
+
+    save_predictions("exp", np.array([0.1, 0.9]), np.array([0.5]), output_dir=tmp_path)
+    oofs, tests = load_predictions(["exp"], output_dir=tmp_path)
+    assert oofs["exp"].tolist() == [0.1, 0.9] and tests["exp"].tolist() == [0.5]
+
+    metrics = {"overall_oof_auc": 0.9, "mean_fold_auc": 0.9, "std_fold_auc": 0.01}
+    log_experiment("a", "primeiro", metrics, log_path=tmp_path / "log.csv")
+    log = log_experiment("b", "segundo", metrics, log_path=tmp_path / "log.csv")
+    assert log["name"].tolist() == ["a", "b"]
+
