@@ -17,10 +17,11 @@ metric instead of eyeballing histograms.
 | 1 | Shape, dtypes, nulls, cardinality, duplicates | `df.info()`, `nunique()`, `duplicated()` | Encoding, imputation |
 | 2 | Target balance | `value_counts(normalize=True)` | Stratified folds; AUC vs accuracy |
 | 3 | Do train and test share a distribution? | Adversarial validation (script below) | AUC≈0.5 → random K-Fold is trustworthy; >0.6 → find drifting columns, use group/time splits |
-| 4 | Does external/original data match? | Same script, competition vs external | AUC≈0.5 → just append; high AUC → **test** it as extra train only, never assume |
+| 4 | Does external/original data match? | Same script, competition vs external | AUC≈0.5 → append rows; high AUC → prefer using it as **features** (target mean per value, auxiliary-model prediction) and test appending by CV |
 | 5 | Which features carry signal? | Univariate AUC of target-mean per value | Prioritize features; spot leaks (AUC≈1.0 is suspicious) |
 | 6 | Is the feature–target relation monotonic? | `groupby(col).target.mean()` | Non-monotonic ordinal (e.g. rating 0 = "not applicable") → try as categorical |
-| 7 | Do any distributions differ between sources? | Compare key rates (e.g. % of delays > 0) | Explain adversarial AUC in plain words for the docs |
+| 7 | Does synthetic data carry generator artifacts? | Value counts of high-cardinality numerics: spikes at specific values or digit patterns | Try digit and frequency features |
+| 8 | Do any distributions differ between sources? | Compare key rates (e.g. % of delays > 0) | Explain adversarial AUC in plain words for the docs |
 
 ## Adversarial validation
 
