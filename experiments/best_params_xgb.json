@@ -1,0 +1,12 @@
+{
+  "auc_subsample": 0.9579286486948941,
+  "learning_rate": 0.05,
+  "max_depth": 8,
+  "min_child_weight": 32.995007715559545,
+  "colsample_bytree": 0.6552913638489599,
+  "subsample": 0.9227883327135907,
+  "reg_lambda": 9.161483163261176,
+  "gamma": 0.0010073168544314317,
+  "n_estimators": 3000,
+  "device": "cuda"
+}

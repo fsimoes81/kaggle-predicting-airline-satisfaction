@@ -1,0 +1,12 @@
+{
+  "auc_subsample": 0.9582004709205257,
+  "learning_rate": 0.05,
+  "num_leaves": 44,
+  "min_child_samples": 21,
+  "colsample_bytree": 0.5617736927064787,
+  "subsample": 0.7994238508675227,
+  "subsample_freq": 1,
+  "reg_lambda": 1.8342227734528687,
+  "max_bin": 511,
+  "n_estimators": 3000
+}
