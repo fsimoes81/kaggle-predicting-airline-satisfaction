@@ -97,7 +97,12 @@ def test_extra_train_only_enters_training_folds():
             return np.tile([0.5, 0.5], (len(X_va), 1))
 
     oof, _, _ = run_stratified_kfold_cv(
-        Spy, X, y, n_splits=4, early_stopping_rounds=None, extra_train=(X_extra, y_extra)
+        Spy,
+        X,
+        y,
+        n_splits=4,
+        early_stopping_rounds=None,
+        extra_train=(X_extra, y_extra),
     )
     assert oof.shape == (len(X),)
     assert seen_train_sizes == [len(X) * 3 // 4 + 50] * 4
@@ -152,3 +157,44 @@ def test_hill_climbing_finds_small_weight_for_weaker_model():
     weights, score = hill_climbing({"strong": strong, "weak": weak}, y)
     assert 0 < weights["weak"] < 0.5
     assert score > roc_auc_score(y, strong)
+
+
+def test_fold_transform_sees_only_training_targets():
+    """Encoders dependentes do alvo devem ser ajustados só no fold de treino."""
+    X, X_test, y, _ = prepare_features(make_df(), make_df(seed=1, with_target=False))
+    calls = []
+
+    def fold_transform(X_tr, y_tr, X_va, X_te):
+        calls.append((len(X_tr), len(y_tr), len(X_va), len(X_te)))
+        return X_tr, X_va, X_te
+
+    run_stratified_kfold_cv(
+        lambda: get_lgbm_model({"n_estimators": 20}),
+        X,
+        y,
+        X_test,
+        n_splits=4,
+        fold_transform=fold_transform,
+    )
+    assert calls == [(300, 300, 100, len(X_test))] * 4
+
+
+def test_digit_features():
+    from src.features import add_digit_features
+
+    df = add_digit_features(pd.DataFrame({"d": [1234, 7, np.nan]}), ["d"], n_digits=3)
+    assert df[["d_digit0", "d_digit1", "d_digit2"]].iloc[0].tolist() == [4, 3, 2]
+    assert df[["d_digit0", "d_digit1"]].iloc[1].tolist() == [7, 0]
+    assert df["d_digit0"].isna().iloc[2]
+
+
+def test_original_target_means_use_only_original_target():
+    from src.features import add_original_target_means
+
+    original = pd.DataFrame({"c": ["a", "a", "b"], TARGET_COL: [1, 0, 1]})
+    df = add_original_target_means(
+        pd.DataFrame({"c": ["a", "b", "z"]}), original, ["c"]
+    )
+    assert df["c_orig_mean"].tolist()[:2] == [0.5, 1.0]
+    assert np.isnan(df["c_orig_mean"].iloc[2])
+
