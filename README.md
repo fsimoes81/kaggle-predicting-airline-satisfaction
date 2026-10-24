@@ -213,7 +213,7 @@ experimentos em `scripts/run_experiment.py`.
 
 **Estrutura:** `src/` (dados, features, encoders, validação, ensemble, registro) ·
 `scripts/` (execução) · `experiments/results.csv` (histórico completo) · `docs/`
-([metodologia técnica](docs/metodologia.md), [skills](docs/skills.md),
+([guia de leitura do código](docs/guia_de_leitura.md), [metodologia técnica](docs/metodologia.md), [skills](docs/skills.md),
 [visão da competição](docs/competition_overview.md)) · `tests/`.
 
 ---
