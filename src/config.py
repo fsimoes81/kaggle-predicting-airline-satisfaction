@@ -13,8 +13,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / os.getenv("DATA_DIR", "data")
 RAW_DATA_DIR = BASE_DIR / os.getenv("RAW_DATA_DIR", "data/raw")
 PROCESSED_DATA_DIR = BASE_DIR / os.getenv("PROCESSED_DATA_DIR", "data/processed")
+EXTERNAL_DATA_DIR = BASE_DIR / os.getenv("EXTERNAL_DATA_DIR", "data/external")
 MODELS_DIR = BASE_DIR / os.getenv("MODELS_DIR", "models")
 SUBMISSIONS_DIR = BASE_DIR / os.getenv("SUBMISSIONS_DIR", "submissions")
+OOF_DIR = BASE_DIR / os.getenv("OOF_DIR", "artifacts/oof")
+EXPERIMENTS_LOG = BASE_DIR / "experiments" / "results.csv"
 NOTEBOOKS_DIR = BASE_DIR / "notebooks"
 DOCS_DIR = BASE_DIR / "docs"
 
@@ -25,7 +28,9 @@ def ensure_dirs() -> None:
         DATA_DIR,
         RAW_DATA_DIR,
         PROCESSED_DATA_DIR,
+        EXTERNAL_DATA_DIR,
         MODELS_DIR,
+        OOF_DIR,
         SUBMISSIONS_DIR,
     ]:
         directory.mkdir(parents=True, exist_ok=True)
@@ -33,6 +38,8 @@ def ensure_dirs() -> None:
 
 # Identificadores da Competição Kaggle
 COMPETITION_NAME = "playground-series-s6e10"
+# Dataset real que originou os dados sintéticos (sem a coluna "Inflight service")
+ORIGINAL_DATASET = "teejmahal20/airline-passenger-satisfaction"
 TARGET_COL = "satisfaction"
 ID_COL = "id"
 

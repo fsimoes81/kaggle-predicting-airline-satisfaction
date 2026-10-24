@@ -28,3 +28,7 @@ if [ -f "$ZIP_FILE" ]; then
 else
     echo "Aviso: Arquivo zip não encontrado no diretório $TARGET_DIR."
 fi
+
+echo "=== Baixando dataset original (dados reais que originaram o sintético) ==="
+kaggle datasets download -d teejmahal20/airline-passenger-satisfaction \
+    -p data/external/original --unzip
