@@ -104,7 +104,7 @@ def test_extra_train_only_enters_training_folds():
 
 
 def test_cv_returns_same_folds_for_same_seed():
-    X, _, y, _ = prepare_features(make_df())
+    _X, _, y, _ = prepare_features(make_df())
     from src.evaluation import get_folds
 
     a, b = get_folds(y, n_splits=3, seed=7), get_folds(y, n_splits=3, seed=7)
