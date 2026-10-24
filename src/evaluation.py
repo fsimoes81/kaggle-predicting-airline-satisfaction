@@ -1,5 +1,6 @@
 """Módulo de validação cruzada (Stratified K-Fold) e avaliação de ROC AUC."""
 
+from collections.abc import Callable
 from typing import Any
 
 import catboost as cb
@@ -71,6 +72,7 @@ def run_stratified_kfold_cv(
     seed: int = RANDOM_SEED,
     early_stopping_rounds: int | None = 50,
     extra_train: tuple[pd.DataFrame, pd.Series] | None = None,
+    fold_transform: Callable | None = None,
 ) -> tuple[np.ndarray, np.ndarray | None, dict[str, Any]]:
     """Executa a validação cruzada estratificada gerando predições OOF e no conjunto de teste.
 
@@ -84,6 +86,9 @@ def run_stratified_kfold_cv(
         early_stopping_rounds: Rodadas de parada antecipada se suportado pelo modelo.
         extra_train: Par (X, y) adicionado apenas aos folds de treino (ex.: dataset
             original). Nunca entra na validação, que segue medindo só dados da competição.
+        fold_transform: Função (X_tr, y_tr, X_va, X_test) -> (X_tr, X_va, X_test)
+            aplicada a cada fold. Serve para encoders que usam o alvo (ex.: target
+            encoding): ajustados só no treino do fold, não vazam a validação.
 
     Returns:
         oof_preds: Array de probabilidades preditas Out-Of-Fold.
@@ -102,6 +107,9 @@ def run_stratified_kfold_cv(
         if extra_train is not None:
             X_tr = pd.concat([X_tr, extra_train[0]], ignore_index=True)
             y_tr = pd.concat([y_tr, extra_train[1]], ignore_index=True)
+        X_te = X_test
+        if fold_transform is not None:
+            X_tr, X_va, X_te = fold_transform(X_tr, y_tr, X_va, X_test)
 
         model = model_fn()
 
@@ -116,7 +124,7 @@ def run_stratified_kfold_cv(
         logger.info(f"Fold {fold + 1}/{n_splits} - ROC AUC: {score:.5f}")
 
         if X_test is not None:
-            test_preds += model.predict_proba(X_test)[:, 1] / n_splits
+            test_preds += model.predict_proba(X_te)[:, 1] / n_splits
 
     overall_oof_auc = roc_auc_score(y, oof_preds)
     mean_fold_auc = float(np.mean(fold_scores))
