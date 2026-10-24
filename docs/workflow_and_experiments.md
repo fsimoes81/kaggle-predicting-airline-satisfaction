@@ -46,27 +46,22 @@ jupyter lab
 ```
 Execute o notebook [`notebooks/01_eda.ipynb`](../notebooks/01_eda.ipynb) para entender a distribuição dos dados e identificar padrões.
 
-### 4. Executar o Baseline
-Você pode rodar via script:
+### 4. Executar Experimentos
 ```bash
-python scripts/run_baseline.py
+python scripts/run_experiment.py --list      # experimentos registrados
+python scripts/run_experiment.py lgbm_raw    # baseline
+python scripts/build_ensemble.py             # ensemble + submissão
 ```
 Ou pelo notebook interativo [`notebooks/02_baseline_model.ipynb`](../notebooks/02_baseline_model.ipynb).
 
 ---
 
-## 📝 Tabela de Registro de Experimentos
+## 📝 Registro de Experimentos
 
-Utilize esta tabela para documentar cada iteração e garantir que você só submete melhorias com validação confirmada.
-
-| ID | Descrição do Experimento | Modelo | Features Usadas | CV OOF (ROC AUC) | Public LB | Comentários |
-| :---: | :--- | :---: | :--- | :---: | :---: | :--- |
-| **EXP-001** | Baseline inicial | LightGBM | Features brutas (Ordinal encode) | *Aguardando execução* | - | Ponto de partida |
-| **EXP-002** | Baseline CatBoost | CatBoost | Features com categoricals nativos | - | - | Comparação com LightGBM |
-| **EXP-003** | Baseline XGBoost | XGBoost | Hist method | - | - | Comparação de modelo |
-| **EXP-004** | Feature Engineering | LightGBM | + Total delay + Survey aggregations | - | - | Avaliar ganho de features |
-| **EXP-005** | Tuning Hiperparâmetros | LGBM/CatBoost | Best features + Optuna | - | - | Ajuste de profundidade/lr |
-| **EXP-006** | Blending / Stacking | Ensemble | OOF de LGBM + CatBoost + XGBoost | - | - | Combinação ponderada |
+O registro é automático: cada `python scripts/run_experiment.py <nome>` acrescenta uma
+linha em [`experiments/results.csv`](../experiments/results.csv) (nome, descrição, AUC OOF,
+média e desvio dos folds, tempo e parâmetros) e salva as predições em `artifacts/oof/`.
+A narrativa completa das rodadas está em [metodologia.md](metodologia.md).
 
 ---
 
