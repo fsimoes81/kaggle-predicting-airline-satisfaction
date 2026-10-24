@@ -148,6 +148,35 @@ EXPERIMENTS: dict[str, dict] = {
         "fe": ["digits", "freq", "orig"],
         "te": True,
     },
+    # Versões finais com todas as famílias, lr 0.02, nas três famílias de modelo
+    "lgbm_fe_final": {
+        "desc": "LightGBM ajustado + todas as features, lr 0.02",
+        "model": "lgbm",
+        "tuned": True,
+        "fe": ["digits", "freq", "orig"],
+        "te": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "xgb_fe_final": {
+        "desc": "XGBoost ajustado + todas as features, lr 0.02",
+        "model": "xgb",
+        "tuned": True,
+        "fe": ["digits", "freq", "orig"],
+        "te": True,
+        "params": {"learning_rate": 0.02, "n_estimators": 8000},
+    },
+    "cat_fe_final": {
+        "desc": "CatBoost profundidade 8 + todas as features",
+        "model": "catboost",
+        "fe": ["digits", "freq", "orig"],
+        "te": True,
+        "params": {
+            "task_type": "GPU",
+            "depth": 8,
+            "iterations": 5000,
+            "l2_leaf_reg": 5,
+        },
+    },
 }
 
 # Colunas numéricas com muitos valores distintos, onde dígitos e frequência fazem sentido
