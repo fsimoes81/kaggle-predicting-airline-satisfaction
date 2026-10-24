@@ -131,7 +131,7 @@ def fig_experiments(log: pd.DataFrame, names: dict[str, str]) -> None:
     ax.invert_yaxis()
     lo = data.min() - 0.001
     ax.set_xlim(lo, data.max() + 0.0006)
-    ax.set_title("Cada etapa somou um pouco; o ensemble final é o melhor")
+    ax.set_title("O ajuste de hiperparâmetros trouxe o maior ganho; o ensemble, o último passo")
     ax.set_xlabel("ROC AUC na validação cruzada (eixo ampliado)")
     ax.grid(axis="y", visible=False)
     _save(fig, "04_jornada_experimentos.png")
@@ -145,7 +145,11 @@ JOURNEY = {
     "lgbm_domain": "LightGBM + features de domínio",
     "lgbm_orig": "LightGBM + dados originais",
     "cat_ratings_cat": "CatBoost, notas como categorias",
-    "ensemble": "Ensemble (hill climbing)",
+    "cat_deep": "CatBoost mais profundo",
+    "xgb_tuned": "XGBoost ajustado (Optuna)",
+    "xgb_tuned_orig": "XGBoost ajustado + dados originais",
+    "lgbm_tuned": "LightGBM ajustado (Optuna)",
+    "ensemble": "Ensemble final (hill climbing)",
 }
 
 
