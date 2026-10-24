@@ -105,11 +105,32 @@ placar ao lado do CV.
 - **Scripts testados.** `adversarial_validation.py` e `validate_submission.py` foram
   executados nos dados reais e com arquivos propositalmente errados.
 
+## Como as skills foram validadas
+
+Cada skill passou por um teste no estilo **A/B com agentes de IA independentes**: o mesmo
+cenário foi entregue a um agente **sem** a skill (controle) e a outro que leu a skill
+antes de responder. As respostas foram avaliadas contra critérios definidos antes do
+teste e que os agentes não viam. Nenhum agente executou comandos (respostas só por escrito).
+
+| Skill | Cenário de teste | Sem skill | Com skill | Conclusão |
+|---|---|---|---|---|
+| `exploring-tabular-data` | Dados reais muito diferentes dos sintéticos; anexá-los piorou o CV | ❌ Descartaria os dados reais | ✅ Usa-os como features | **Essencial**: evita o erro que custou ~0.0006 de AUC neste projeto |
+| `kickoff-tabular-competition` | Plano do 1º dia de uma competição nova | ❌ Consulta a comunidade só no fim; original como linhas | ✅ Comunidade cedo; original como features | **Essencial** |
+| `writing-ml-portfolio-docs` | Início do README de portfólio | 🟡 Stack técnica no topo; métrica pouco traduzida | ✅ Dados sintéticos declarados, todo número traduzido, stack no fim | **Melhora a qualidade** |
+| `submitting-to-kaggle` | Prazo em 20 min, usuário inacessível, pediu revisão prévia | ✅ Não envia | ✅ Não envia; valida com o script, confere cota e lembra das 2 finais | Agrega procedimento |
+| `running-cv-experiments` | Loop de CV com dados externos, com pressa | ✅ | ✅ | Comportamento já correto; o teste revelou uma lacuna (corrigida e retestada) |
+| `ensembling-oof-predictions` | Hill climbing devolveu um único modelo | ✅ | ✅ | Comportamento já correto; o controle sugeriu uma checagem melhor, incorporada |
+
+**Leitura honesta:** duas skills mudam o comportamento de forma decisiva, uma melhora a
+qualidade e três reforçam o que o modelo de IA já faz bem, servindo mais como
+padronização e checklist. Os testes também melhoraram as próprias skills: duas receberam
+correções vindas diretamente das respostas dos agentes.
+
 ## Próximos passos (roadmap das skills)
 
 | Ideia | Gatilho | Por que ainda não |
 |---|---|---|
-| Testes de pressão com subagentes | Validar que outro agente segue as skills sob prazo | Próxima rodada (metodologia TDD para skills) |
+| Repetições dos testes (5+ por cenário) | Medir variância do comportamento, não só um caso | Rodada única até aqui |
 | `engineering-features-safely` | Criar features sem vazamento (target encoding com CV interno) | Este dataset premiou poucas features |
 | `tuning-gbdt-hyperparameters` | Otimizar LightGBM/XGBoost/CatBoost | Generalizar `scripts/tune.py` |
 | `explaining-model-decisions` | SHAP e explicações para cliente | Útil para consultoria |
