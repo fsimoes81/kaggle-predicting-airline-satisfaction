@@ -36,11 +36,16 @@ for tr, va in get_folds(y):
 ```
 Fit encoders on competition + extra data together so categories line up.
 
+**If appending extra rows doesn't help** (common under distribution shift), don't stop at
+"drop it". Variants are separate experiments: an `is_extra` flag column, a lower
+`sample_weight` (0.2–0.5) and, usually best, the extra data **as features** (target mean
+per value, auxiliary-model prediction). REQUIRED SUB-SKILL: exploring-tabular-data.
+
 ## Quick Reference
 
 | Situation | Do |
 |-----------|----|
-| Gain < fold std | Re-run with 2–3 seeds before believing it |
+| Gain < fold std | Compare fold by fold (paired); re-run with 2–3 seeds before believing it |
 | GBDT with early stopping | The early-stopping set is the validation fold; fine for OOF, but say so in the docs |
 | GPU available | XGBoost `device="cuda"`, CatBoost `task_type="GPU"`; LightGBM CPU is usually fast enough |
 | Slow model | Iterate on a 20% stratified subsample, confirm the winner on full data |

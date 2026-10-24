@@ -22,7 +22,9 @@ apply the same weights to the test predictions.
 3. Repeatedly mix in the (model, fraction `a`) pair that most improves the OOF metric:
    `blend = (1 - a) * blend + a * model`, with `a` in {0.05, 0.1, 0.2, 0.3, 0.5}.
 4. Stop when no step helps by more than `tol` (1e-6). Weights are the resulting fractions.
-5. Blend the test ranks with the same weights.
+5. **Check robustness:** keep the blend only if it beats the best single model in at least
+   4 of 5 folds. For a stricter test, pick weights on 4 folds and score on the 5th, rotating.
+6. Blend the test ranks with the same weights.
 
 Implementation (~40 lines): `src/ensemble.py` (`to_rank`, `blend`, `hill_climbing`).
 
