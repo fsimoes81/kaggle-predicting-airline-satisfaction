@@ -39,7 +39,7 @@ the others.
 | CV | StratifiedKFold(5, shuffle, seed 42) | Data is i.i.d. synthetic; CV tracks the private LB |
 | First models | LightGBM, XGBoost (GPU), CatBoost (native categoricals) | Strong, diverse, fast |
 | Learning rate | 0.05 to iterate, 0.02 for finals | Lower rate + early stopping = small, reliable gain |
-| Feature engineering | Few and justified | Arbitrary features add noise on synthetic data |
+| Feature engineering | The families below, one per experiment | Arbitrary hand-made features add noise; these families are proven |
 | Time budget | ~60% iteration, 20% blending, 20% docs | Docs are the portfolio |
 
 ## Feature families that pay off on Playground synthetic data
