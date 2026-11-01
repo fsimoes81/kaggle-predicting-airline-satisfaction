@@ -11,8 +11,8 @@
 | Metric | Value | Meaning |
 |---|---|---|
 | **ROC AUC (cross-validation)** | **0.9610** | For 96 of every 100 random (satisfied, unsatisfied) pairs, the model ranks the satisfied passenger higher |
-| **ROC AUC (public leaderboard)** | **0.9604** | Same metric on unseen data; validation tracked the leaderboard within 0.001 on every submission |
-| **Rank** | **~1253 / 2907** (top 43%) | Up from ~1569 after diagnosing a feature-engineering gap |
+| **ROC AUC (private leaderboard, final result)** | **0.9613** | Same metric on unseen data revealed only when the competition ended; validation stayed within 0.001 of both leaderboards on every submission |
+| **Final rank** | **1537 / 3747** (top 41%) | Above the median team; up 150 places from the public leaderboard (1687) to the private one |
 | **Logged experiments** | 20 | Each reproducible with one command, failures included |
 
 ![Experiment journey](docs/figures/04_jornada_experimentos.png)
@@ -37,8 +37,9 @@ Some techniques below exploit generator artifacts and are flagged as such.
 2. **Business travelers in business class are 73% satisfied; personal travelers ~10%**,
    whatever the class. → Class × travel type pairs are used in target encoding.
 3. **Train and test are indistinguishable (adversarial AUC 0.50); synthetic vs. real data
-   is not (0.83)**, since synthetic flights are delayed 5× less often. → Local CV is trustworthy.
-   Real data hurt as extra rows but helped as *features*.
+   is not (0.83)**, since synthetic flights are delayed 5× less often. → Local CV is trustworthy:
+   on all four submissions it landed between the public and private scores, with the same
+   model order on both. Real data hurt as extra rows but helped as *features*.
 
 ## Solution
 
