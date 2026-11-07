@@ -24,8 +24,9 @@ didática está no [README](../README.md).
 | Dados extras (original) só nos folds de treino | Teste `test_extra_train_only_enters_training_folds` |
 | Encoders que usam o alvo ajustados por fold, com *cross fitting* interno | `fold_transform` + `FoldTargetEncoder`, teste `test_target_encoder_validation_uses_training_fold_only` |
 
-Correlação CV × placar público: as quatro submissões mantiveram a ordem do CV, com o
-placar 0.0004–0.0007 abaixo do CV (ver tabela de submissões abaixo).
+Correlação CV × placar: as quatro submissões mantiveram a ordem do CV nos dois placares,
+com o público 0.0004–0.0007 abaixo do CV e o privado 0.0004–0.0005 acima dele. O CV ficou
+entre os dois placares em todas as submissões (ver tabela de submissões abaixo).
 
 ## 3. Achados da EDA que viraram decisões
 
@@ -69,12 +70,12 @@ reimplementadas com testes neste repositório.
 
 ### Versões finais (todas as famílias, lr 0.02)
 
-| Modelo | OOF AUC | Placar público |
-|---|---|---|
-| `lgbm_fe_final` | 0.96062 | — |
-| `cat_fe_final` (GPU, profundidade 8) | 0.96062 | — |
-| `xgb_fe_final` (GPU) | 0.96069 | 0.96034 |
-| **Ensemble** (7 modelos, hill climbing) | **0.96099** | **0.96037** |
+| Modelo | OOF AUC | Placar público | Placar privado |
+|---|---|---|---|
+| `lgbm_fe_final` | 0.96062 | — | — |
+| `cat_fe_final` (GPU, profundidade 8) | 0.96062 | — | — |
+| `xgb_fe_final` (GPU) | 0.96069 | 0.96034 | 0.96115 |
+| **Ensemble** (7 modelos, hill climbing) | **0.96099** | **0.96037** | **0.96134** |
 
 Pesos do ensemble: XGBoost final 32%, CatBoost final 29%, LightGBM com dígitos 14%,
 LightGBM com original 8%, LightGBM com frequência 7%, LightGBM final 5% e XGBoost
@@ -85,14 +86,27 @@ Posição no placar público em 24/10/2026: **~1253 de 2907 (top 43%)**. O plat�
 ~770 equipes acima de 0.9615 vem principalmente de stacking com predições OOF públicas
 compartilhadas, abordagem fora do escopo deste projeto.
 
+### Resultado final
+
+Competição encerrada em 31/10/2026, com as duas submissões da rodada 3 selecionadas.
+Placar privado: **AUC 0.96134, posição 1537 de 3747 (top 41%)**, com o ensemble como
+melhor submissão. A mediana privada foi 0.96078 e o topo, 0.96318 (0.00184 acima).
+
+- **O ensemble se confirmou:** venceu o XGBoost sozinho por 0.00019 no privado, contra
+  0.00030 no CV e 0.00003 no público. A seleção pelo CV não teria mudado com o privado:
+  as duas melhores submissões no CV foram também as melhores no privado.
+- **A posição caiu e voltou a subir por motivos diferentes.** Paramos de submeter em
+  24/10, então o avanço das outras equipes na última semana nos levou de ~1253 para 1687
+  no placar público final. Na abertura do privado subimos 150 posições, até 1537.
+
 ### Submissões
 
-| Arquivo | CV | Público | Δ |
-|---|---|---|---|
-| `lgbm_tuned` (rodada 2) | 0.95929 | 0.95859 | −0.00070 |
-| `ensemble` (rodada 2) | 0.95935 | 0.95863 | −0.00072 |
-| `xgb_fe_final` (rodada 3) | 0.96069 | 0.96034 | −0.00035 |
-| `ensemble` (rodada 3) | 0.96099 | 0.96037 | −0.00062 |
+| Arquivo | CV | Público | Δ CV | Privado | Δ CV |
+|---|---|---|---|---|---|
+| `lgbm_tuned` (rodada 2) | 0.95929 | 0.95859 | −0.00070 | 0.95971 | +0.00042 |
+| `ensemble` (rodada 2) | 0.95935 | 0.95863 | −0.00072 | 0.95972 | +0.00037 |
+| `xgb_fe_final` (rodada 3) | 0.96069 | 0.96034 | −0.00035 | 0.96115 | +0.00046 |
+| `ensemble` (rodada 3) | 0.96099 | 0.96037 | −0.00062 | 0.96134 | +0.00035 |
 
 ## 5. Ensemble
 

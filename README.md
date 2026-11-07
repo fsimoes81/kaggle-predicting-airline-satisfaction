@@ -14,8 +14,8 @@
 | Indicador | Valor | O que significa |
 |---|---|---|
 | **ROC AUC (validação)** | **0.9610** | Sorteando um passageiro satisfeito e um insatisfeito, o modelo coloca o satisfeito à frente em **96 de cada 100** pares |
-| **ROC AUC (placar público)** | **0.9604** | O mesmo número medido pelo Kaggle em dados que o modelo nunca viu: o resultado se sustenta fora de casa |
-| **Posição** | **~1253 de 2907** (top 43%) | Começou em ~1569; subiu ao identificar e fechar uma lacuna de *features* |
+| **ROC AUC (placar privado, resultado final)** | **0.9613** | O mesmo número medido pelo Kaggle em dados que o modelo nunca viu e revelados só no fim da competição: o resultado se sustentou fora de casa |
+| **Posição final** | **1537 de 3747** (top 41%) | Acima da mediana das equipes; subiu 150 posições entre o placar público (1687) e o privado |
 | **Experimentos registrados** | 20 | Todos reproduzíveis com um comando, incluindo os que não funcionaram |
 
 ![Jornada de experimentos](docs/figures/04_jornada_experimentos.png)
@@ -90,7 +90,9 @@ Cada descoberta abaixo levou a uma decisão concreta.
   reais ele acerta com facilidade (0.83), principalmente porque os sintéticos têm
   **5x menos voos atrasados**.
 - **Decisão 1:** como treino e teste são parecidos, nossa validação interna prevê bem o
-  placar do Kaggle. Isso se confirmou: o placar ficou sempre entre 0.0004 e 0.0007 abaixo da validação, mantendo a mesma ordem entre os modelos.
+  placar do Kaggle. Isso se confirmou: nas quatro submissões, a validação ficou entre o
+  placar público (até 0.0007 abaixo) e o privado (até 0.0005 acima), com a mesma ordem
+  entre os modelos nos dois.
 - **Decisão 2:** **não** misturar os dados reais ao treino como linhas extras (testamos:
   piorou) e, em vez disso, usá-los como **fonte de pistas** (ver "o que funcionou").
 
@@ -132,7 +134,8 @@ escopo, escolhido para ser competitivo **e** explicável.
 Usamos **validação cruzada**: dividimos os dados de treino em 5 partes, treinamos com 4 e
 testamos na quinta, rodando 5 vezes, como fazer 5 simulados diferentes antes da prova.
 Toda decisão foi tomada olhando esse "simulado", nunca o placar do Kaggle. A prova de que
-funciona: o placar público (dados nunca vistos) ficou sempre a menos de 0.001 do simulado.
+funciona: os placares público e privado (dados nunca vistos) ficaram sempre a menos de
+0.001 do simulado.
 </details>
 
 ---
@@ -166,8 +169,8 @@ pioravam. Corrigido com teste automatizado; agora ele testa frações de 5% a 50
 
 ## 🚀 Com mais tempo ou em produção
 
-- **Stacking com meta-modelo e redes neurais tabulares:** o topo do placar (~0.962) usa
-  isso, com ganho de ~0.001 e custo alto de complexidade.
+- **Stacking com meta-modelo e redes neurais tabulares:** caminho comum no topo do placar,
+  que terminou em 0.9632 (~0.002 acima do nosso), com custo alto de complexidade.
 - **Retirar as features de artefato** (dígitos, frequência) em dados reais e medir de novo.
 - **Explicabilidade por passageiro** (SHAP): "este passageiro tem risco alto por causa
   do Wi-Fi e do embarque", útil para a equipe de atendimento.
@@ -227,6 +230,7 @@ experimentos em `scripts/run_experiment.py`.
 | **OOF (out-of-fold)** | Previsões que cada modelo fez sobre dados que não viu no treino; base da validação e do ensemble |
 | **Feature** | Uma coluna usada pelo modelo, original ou criada a partir de outras |
 | **Target encoding** | Trocar cada valor pela taxa de satisfação observada para ele, calculada sem olhar a própria linha |
+| **Placar público e privado** | O público aparece durante a competição, calculado com uma parte do teste; o privado usa o restante, só é revelado no fim e define a posição final |
 | **Vazamento (leakage)** | Quando o modelo "vê a resposta" durante o treino e parece melhor do que é |
 | **Gradient boosting (GBDT)** | Família de modelos que soma milhares de árvores pequenas, cada uma corrigindo a anterior |
 | **Hiperparâmetros** | Configurações do modelo (profundidade das árvores, velocidade de aprendizado) |
